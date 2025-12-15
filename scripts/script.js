@@ -3,6 +3,40 @@ const pageLimit = 9; // Number of products per page
 let currentPage = 1;
 let totalProducts = 0;
 let totalPages = 1;
+let categoriesList = [];
+
+function fetchCategories(callback) {
+    $.ajax({
+        url: "https://api.escuelajs.co/api/v1/categories",
+        method: "GET",
+        success: function(categories) {
+            categoriesList = categories;
+            if (callback) callback();
+        }
+    });
+}
+
+function getCategoryNameById(catId) {
+    let found = categoriesList.find(cat => cat.id === catId);
+    return found ? found.name : catId;
+}
+
+function populateCategorySelect() {
+    let $sel = $("#categoryId");
+    if (!$sel.length) return;
+    $sel.empty();
+    categoriesList.forEach(cat => {
+        $sel.append(`<option value="${cat.id}">${cat.name}</option>`);
+    });
+}
+function populateEditCategorySelect(selectedId) {
+    let $sel = $("#edit-categoryId");
+    if (!$sel.length) return;
+    $sel.empty();
+    categoriesList.forEach(cat => {
+        $sel.append(`<option value="${cat.id}" ${cat.id==selectedId?'selected':''}>${cat.name}</option>`);
+    });
+}
 
 function fetchTotalProducts(callback) {
     $.ajax({
@@ -10,11 +44,10 @@ function fetchTotalProducts(callback) {
         method: "GET",
         data: { offset: 0, limit: 1 },
         success: function(products, textStatus, request) {
-            // The API does not return total count, so fetch a big number and count.
             $.ajax({
                 url: baseUrl,
                 method: 'GET',
-                data: { offset: 0, limit: 1000 }, // Hardcoded, reliable for up to 1000 products
+                data: { offset: 0, limit: 1000 }, // reliable for up to 1000 products
                 success: function(products) {
                     totalProducts = products.length;
                     totalPages = Math.ceil(totalProducts / pageLimit);
@@ -38,12 +71,14 @@ function loadProducts(page = 1) {
                 productListContainer.html('<p class="text-center">No products found.</p>');
             }
             products.forEach(function(product) {
+                let catName = (product.category && product.category.name) ? product.category.name : getCategoryNameById(product.categoryId);
                 let card = `<div class="col-md-4 mb-4">
                     <div class="card h-100">
                         <img src="${(product.images&&product.images[0]) ? product.images[0] : ''}" class="card-img-top" alt="${product.title}">
                         <div class="card-body">
                             <h5 class="card-title">${product.title}</h5>
                             <p class="card-text">${product.description}</p>
+                            <p class="card-text mb-1"><b>Category:</b> ${catName}</p>
                             <div class="d-flex justify-content-between align-items-center mb-2">
                               <span class="badge bg-success">$${product.price}</span>
                             </div>
@@ -119,7 +154,7 @@ window.editProduct = function(id) {
             $("#edit-title").val(product.title);
             $("#edit-price").val(product.price);
             $("#edit-description").val(product.description);
-            $("#edit-categoryId").val(product.category.id);
+            populateEditCategorySelect(product.category ? product.category.id : undefined);
             $("#edit-imageUrl").val((product.images&&product.images[0]) ? product.images[0] : '');
             var editModal = new bootstrap.Modal(document.getElementById('editModal'));
             editModal.show();
@@ -167,8 +202,11 @@ window.deleteProduct = function(id) {
 
 // On page load
 $(function() {
-    fetchTotalProducts(function(){
-        currentPage = 1;
-        loadProducts(currentPage);
+    fetchCategories(function() {
+        populateCategorySelect();
+        fetchTotalProducts(function(){
+            currentPage = 1;
+            loadProducts(currentPage);
+        });
     });
 });
